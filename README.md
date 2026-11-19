@@ -26,7 +26,9 @@ copy is a read-only, live-updating viewer; its **Edit** button opens this site.
 - **GitHub Pages:** every push to `modern` runs [`.github/workflows/pages.yml`](.github/workflows/pages.yml),
   which publishes `index.html`, `app.js` and `client.jsonld` and stamps `app.js?v=<commit>` so
   browsers fetch the new script as soon as the page itself refreshes.
-- **Pod viewer:** run `./deploy.sh`. It is not stamped: Inrupt treats `app.js?v=...` as a
+- **Pod viewer:** the same workflow runs `deploy.sh` with the repo secrets `SOLID_CLIENT_ID` and
+  `SOLID_CLIENT_SECRET` and the variables `SOLID_WEBID` and `SOLID_POD_ROOT` (or run `./deploy.sh`
+  locally with `../.env`). It is not stamped: Inrupt treats `app.js?v=...` as a
   different, nonexistent resource.
 
 ## Access

@@ -3,8 +3,11 @@
 # Re-runnable: app files are overwritten, pad.ttl is only created if missing.
 set -euo pipefail
 HERE=${0:A:h}
-ENV_FILE=${ENV_FILE:-$HERE/../.env}  # needs SOLID_CLIENT_ID, SOLID_CLIENT_SECRET, SOLID_WEBID, SOLID_POD_ROOT
-set -a; . "$ENV_FILE"; set +a
+# Needs SOLID_CLIENT_ID, SOLID_CLIENT_SECRET, SOLID_WEBID, SOLID_POD_ROOT: from the
+# environment (GitHub Actions) or from an env file (default ../.env, override with ENV_FILE).
+ENV_FILE=${ENV_FILE:-$HERE/../.env}
+if [[ -f $ENV_FILE ]]; then set -a; . "$ENV_FILE"; set +a; fi
+: ${SOLID_CLIENT_ID:?} ${SOLID_CLIENT_SECRET:?} ${SOLID_WEBID:?} ${SOLID_POD_ROOT:?}
 DEST="${SOLID_POD_ROOT}pad/"
 
 tok() {

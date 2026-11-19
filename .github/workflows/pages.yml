@@ -1,4 +1,4 @@
-name: Deploy to GitHub Pages
+name: Deploy (GitHub Pages and Pod)
 
 on:
   push:
@@ -41,3 +41,22 @@ jobs:
           path: _site
       - id: deployment
         uses: actions/deploy-pages@v4
+
+  # Publish the read-only viewer to the Pod (pad/index.html, pad/app.js) with
+  # deploy.sh. pad.ttl is only seeded if missing, so the pad text is never overwritten.
+  pod:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: pod
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install zsh
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq zsh
+      - name: Deploy viewer to the Pod
+        env:
+          SOLID_CLIENT_ID: ${{ secrets.SOLID_CLIENT_ID }}
+          SOLID_CLIENT_SECRET: ${{ secrets.SOLID_CLIENT_SECRET }}
+          SOLID_WEBID: ${{ vars.SOLID_WEBID }}
+          SOLID_POD_ROOT: ${{ vars.SOLID_POD_ROOT }}
+        run: zsh ./deploy.sh
