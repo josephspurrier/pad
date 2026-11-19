@@ -1,38 +1,57 @@
-<!DOCTYPE html>
-<html>
-<head><meta charset='UTF-8'>
-<title>When can we meet? -- a SoLiD app</title>
-<link type="text/css" rel="stylesheet" href="https://linkeddata.github.io/tabulator-firefox/content/tabbedtab.css" />
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pad</title>
 <style>
-
-body { margin: 10%; }
-input { background-color: #eef; padding: 0.1em;  border: .5em solid white; 
-    ont-size: 110%; font-family: monospace;};
-
-table  { border-collapse: collapse;}
-
-
-/*  vertical-align: middle;  for from */
-.MatrixCorner { background-color: white; }
-table.matrix td { padding: 0.3em; } 
-tr.naviMenu  { background-color: white;}
-tr.naviMenu td { text-align: middle; vertical-align: middle; padding-top: 4em; };
-
+  :root {
+    --bg: #fbfaf7; --fg: #1d1d1b; --muted: #77756f; --line: #e6e3dc;
+    --accent: #3b5bdb; --focus: #f1efe8; --warn: #b4521d;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #17171a; --fg: #e8e6e1; --muted: #8d8a83; --line: #2b2b30;
+            --accent: #8ea4ff; --focus: #222227; --warn: #f0a070; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg);
+         font: 16px/1.55 ui-sans-serif, system-ui, -apple-system, sans-serif; }
+  header { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center;
+           justify-content: space-between; padding: 14px 16px;
+           border-bottom: 1px solid var(--line); }
+  h1 { font-size: 17px; margin: 0; font-weight: 600; }
+  #status { color: var(--muted); font-size: 13px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  #live::before { content: "●"; margin-right: 4px; color: var(--muted); }
+  #live.on::before { color: #2f9e44; }
+  button { font: inherit; font-size: 13px; padding: 4px 12px; border-radius: 6px;
+           border: 1px solid var(--line); background: transparent; color: var(--fg); cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  main { max-width: 760px; margin: 0 auto; padding: 24px 16px 80px; }
+  #pad { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 15px; }
+  .chunk { padding: 2px 8px; min-height: 1.55em; border-radius: 4px;
+           white-space: pre-wrap; word-break: break-word; outline: none; }
+  .chunk[contenteditable]:focus { background: var(--focus); }
+  .chunk.dirty { box-shadow: inset 2px 0 0 var(--accent); }
+  #msg { color: var(--warn); font-size: 13px; min-height: 1.2em; margin-bottom: 12px; }
+  .hint { color: var(--muted); font-size: 12px; margin-top: 24px; }
 </style>
-<!--
-<script type="text/javascript" src="https://linkeddata.github.io/tabulator/js/mashup/mashlib.js"></script>
--->
-<script type="text/javascript" src="https://timbl.com/timbl/Automation/Library/Mashup/mashlib-alpha.js"></script>
-<script type="text/javascript" src="app-pad.js"></script>
-
-
 </head>
 <body>
-<p>...</p>
-<!-- for outlin code -->
-<div id="outline"></div>
-
-<div id="pad">
-</div>
+<header>
+  <h1>Pad</h1>
+  <div id="status">
+    <span id="live">connecting</span>
+    <span id="who">viewing as public</span>
+    <button id="auth" hidden>Log in</button>
+  </div>
+</header>
+<main>
+  <div id="msg"></div>
+  <div id="pad" aria-label="Pad text"></div>
+  <p class="hint" id="hint" hidden>Enter splits a line, Backspace at the start of a line joins it to the line above, arrow keys move between lines. Edits save automatically.</p>
+</main>
+<script src="https://cdn.jsdelivr.net/npm/@inrupt/solid-client-authn-browser@5.0.0/dist/solid-client-authn.bundle.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/n3@2.13.12/browser/n3.min.js"></script>
+<script src="app.js"></script>
 </body>
 </html>
