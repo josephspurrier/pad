@@ -1,0 +1,43 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [modern]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # Cache busting: GitHub Pages serves everything with max-age=600, so a normal
+      # reload can reuse an old app.js. Stamp local assets with the commit so a new
+      # index.html always pulls the matching script.
+      - name: Stamp asset URLs with the commit
+        run: |
+          v="${GITHUB_SHA::8}"
+          mkdir -p _site
+          cp index.html app.js client.jsonld .nojekyll _site/
+          sed -i "s|src=\"app.js\"|src=\"app.js?v=$v\"|" _site/index.html
+          grep -q "app.js?v=$v" _site/index.html
+          echo "stamped app.js?v=$v"
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4

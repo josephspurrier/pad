@@ -21,6 +21,14 @@ Why not run it from the Pod any more: Inrupt serves Pod HTML with
 login redirect such as `page.html?code=...` as a different, nonexistent resource. So the Pod
 copy is a read-only, live-updating viewer; its **Edit** button opens this site.
 
+## Deploying
+
+- **GitHub Pages:** every push to `modern` runs [`.github/workflows/pages.yml`](.github/workflows/pages.yml),
+  which publishes `index.html`, `app.js` and `client.jsonld` and stamps `app.js?v=<commit>` so
+  browsers fetch the new script as soon as the page itself refreshes.
+- **Pod viewer:** run `./deploy.sh`. It is not stamped: Inrupt treats `app.js?v=...` as a
+  different, nonexistent resource.
+
 ## Access
 
 `deploy.sh` copies the viewer to `<pod>/pad/`, seeds `pad.ttl` if missing, and adds a
