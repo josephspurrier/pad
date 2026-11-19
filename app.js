@@ -48,7 +48,8 @@
 
   let me = null;
   let canEdit = false;
-  let state = { order: [], next: new Map(), content: new Map(), author: null };
+  let state = { order: [], next: new Map(), content: new Map(), author: null, authors: new Map(), modes: new Set() };
+  let acrUrl = null; // the pad's Access Control Resource (from the Link rel="acl" header)
   const dirty = new Map(); // chunk IRI -> debounce timer
   let queue = Promise.resolve(); // serializes PATCHes
   let version = 0; // bumps on every local edit
@@ -94,6 +95,7 @@
     const quads = new N3.Parser({ baseIRI: DOC }).parse(await r.text());
     const next = new Map();
     const content = new Map();
+    const authors = new Map();
     let author = null;
     for (const q of quads) {
       const s = q.subject.value, p = q.predicate.value, o = q.object.value;
@@ -101,14 +103,19 @@
         if (next.has(s)) console.warn('chunk has two pad:next links', s);
         next.set(s, o);
       } else if (p === CONTENT) content.set(s, o);
-      else if (p === AUTHOR && s === SUBJ) author = o;
+      else if (p === AUTHOR) { if (s === SUBJ) author = o; else authors.set(s, o); }
     }
+    // The Pod says what this user may do: WAC-Allow: user="read write append control"
+    const wac = /user="([^"]*)"/.exec(r.headers.get('WAC-Allow') || '');
+    const modes = new Set(wac ? wac[1].split(/\s+/) : []);
+    const acl = /<([^>]+)>\s*;\s*rel="acl"/.exec(r.headers.get('Link') || '');
+    if (acl) acrUrl = new URL(acl[1], DOC).href;
     const order = [];
     const seen = new Set([SUBJ]);
     let c = next.get(SUBJ);
     while (c && !seen.has(c)) { order.push(c); seen.add(c); c = next.get(c); }
     if (c !== SUBJ) console.warn('pad list is not closed at', c);
-    return { order, next, content, author };
+    return { order, next, content, author, authors, modes };
   }
 
   function patch(del, ins, where) {
@@ -157,6 +164,8 @@
         el.textContent = text;
         if (focused) setCaret(el, off);
       }
+      const by = state.authors.get(id);
+      el.title = by ? 'Written by ' + by : '';
       const want = prev ? prev.nextSibling : padEl.firstChild;
       if (want !== el) padEl.insertBefore(el, want);
       prev = el;
@@ -342,17 +351,136 @@
     }
   }
 
+  // ---------- sharing (owner only) ----------
+  // Editors live in one ACP policy in the pad's ACR, added next to the existing
+  // owner and public-read policies. Each change is a small PATCH, so nothing else
+  // in the ACR is rewritten.
+  const ACP = 'http://www.w3.org/ns/solid/acp#';
+  const ACL = 'http://www.w3.org/ns/auth/acl#';
+  const RDF_TYPE = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type';
+  let editors = [];
+  let hasPolicy = false;
+
+  async function acrPatch(body) {
+    const r = await auth.fetch(acrUrl, { method: 'PATCH', headers: { 'Content-Type': 'application/sparql-update' }, body });
+    if (!r.ok) throw new Error(`could not change access (HTTP ${r.status})`);
+  }
+
+  async function loadEditors() {
+    const r = await auth.fetch(acrUrl, { headers: { Accept: 'text/turtle' }, cache: 'no-store' });
+    if (!r.ok) throw new Error(`could not read access rules (HTTP ${r.status})`);
+    const quads = new N3.Parser({ baseIRI: acrUrl }).parse(await r.text());
+    const M = acrUrl + '#editorsMatcher';
+    editors = quads.filter((q) => q.subject.value === M && q.predicate.value === ACP + 'agent').map((q) => q.object.value);
+    hasPolicy = quads.some((q) => q.object.value === acrUrl + '#editorsAC' && q.predicate.value === ACP + 'accessControl');
+  }
+
+  async function addEditor(webId) {
+    const A = acrUrl, M = `${A}#editorsMatcher`;
+    const ins = hasPolicy ? [[M, ACP + 'agent', iri(webId)]] : [
+      [A, ACP + 'accessControl', iri(`${A}#editorsAC`)],
+      [`${A}#editorsAC`, RDF_TYPE, iri(ACP + 'AccessControl')],
+      [`${A}#editorsAC`, ACP + 'apply', iri(`${A}#editors`)],
+      [`${A}#editors`, RDF_TYPE, iri(ACP + 'Policy')],
+      [`${A}#editors`, ACP + 'allow', iri(ACL + 'Read')],
+      [`${A}#editors`, ACP + 'allow', iri(ACL + 'Write')],
+      [`${A}#editors`, ACP + 'allow', iri(ACL + 'Append')],
+      [`${A}#editors`, ACP + 'anyOf', iri(M)],
+      [M, RDF_TYPE, iri(ACP + 'Matcher')],
+      [M, ACP + 'agent', iri(webId)],
+    ];
+    await acrPatch(`INSERT DATA {\n${triples(ins)}\n}`);
+  }
+
+  async function removeEditor(webId) {
+    await acrPatch(`DELETE DATA {\n${triples([[acrUrl + '#editorsMatcher', ACP + 'agent', iri(webId)]])}\n}`);
+  }
+
+  async function checkWebId(webId) { // best effort: a WebID profile should mention itself
+    try {
+      const r = await fetch(webId, { headers: { Accept: 'text/turtle' } });
+      if (!r.ok) return `profile returned HTTP ${r.status}`;
+      const quads = new N3.Parser({ baseIRI: r.url }).parse(await r.text());
+      return quads.some((q) => q.subject.value === webId) ? null : 'profile does not describe this WebID';
+    } catch (e) { return 'profile could not be read'; }
+  }
+
+  function renderEditors() {
+    const list = $('editors');
+    list.replaceChildren();
+    if (!editors.length) {
+      const li = document.createElement('li');
+      li.className = 'empty';
+      li.textContent = 'No editors yet. Only you can edit.';
+      list.append(li);
+    }
+    for (const w of editors) {
+      const li = document.createElement('li');
+      const a = document.createElement('a');
+      a.href = w; a.textContent = w; a.target = '_blank'; a.rel = 'noopener';
+      const b = document.createElement('button');
+      b.textContent = 'Remove';
+      b.onclick = () => run(b, async () => { await removeEditor(w); }, `Removed ${w}`);
+      li.append(a, b);
+      list.append(li);
+    }
+  }
+
+  async function run(btn, fn, done) {
+    const note = $('shareMsg');
+    btn.disabled = true;
+    note.textContent = '';
+    try {
+      await fn();
+      await loadEditors();
+      renderEditors();
+      note.textContent = done;
+    } catch (e) {
+      note.textContent = e.message;
+    } finally { btn.disabled = false; }
+  }
+
+  function setupSharing() {
+    const panel = $('share'), toggle = $('shareBtn'), form = $('addForm'), input = $('webid');
+    toggle.hidden = false;
+    toggle.onclick = async () => {
+      panel.hidden = !panel.hidden;
+      toggle.setAttribute('aria-expanded', String(!panel.hidden));
+      if (!panel.hidden) {
+        try { await loadEditors(); renderEditors(); } catch (e) { $('shareMsg').textContent = e.message; }
+      }
+    };
+    form.onsubmit = (e) => {
+      e.preventDefault();
+      const w = input.value.trim();
+      let u;
+      try { u = new URL(w); } catch { $('shareMsg').textContent = 'Enter a WebID URL, like https://id.inrupt.com/name'; return; }
+      if (u.protocol !== 'https:') { $('shareMsg').textContent = 'WebIDs start with https://'; return; }
+      if (w === me) { $('shareMsg').textContent = 'You are the owner and can already edit.'; return; }
+      if (editors.includes(w)) { $('shareMsg').textContent = 'Already an editor.'; return; }
+      run(form.querySelector('button'), async () => {
+        const problem = await checkWebId(w);
+        if (problem && !confirm(`${w}: ${problem}. Add anyway?`)) throw new Error('Not added.');
+        await addEditor(w);
+        input.value = '';
+      }, `Added ${w}. They can edit after logging in at ${EDITOR_URL}`);
+    };
+  }
+
   // ---------- start ----------
   try {
     state = await load();
   } catch (e) {
     msg(e.message);
   }
-  canEdit = Boolean(me && state.author && me === state.author);
+  // Ask the Pod, not the document: anyone the owner granted Write may edit.
+  canEdit = Boolean(me && state.modes.has('write'));
+  const isOwner = Boolean(me && state.modes.has('control'));
   $('who').textContent = !me ? 'viewing as public'
-    : canEdit ? `editing as ${me}` : `logged in as ${me} (read-only)`;
+    : isOwner ? `editing as ${me} (owner)` : canEdit ? `editing as ${me}` : `logged in as ${me} (read-only)`;
   $('hint').hidden = !canEdit;
   render();
+  if (isOwner && acrUrl) setupSharing();
 
   if (canEdit && state.order.length === 0) { // empty pad: create the first line
     const nid = newId();

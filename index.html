@@ -34,6 +34,19 @@
   .chunk.dirty { box-shadow: inset 2px 0 0 var(--accent); }
   #msg { color: var(--warn); font-size: 13px; min-height: 1.2em; margin-bottom: 12px; }
   .hint { color: var(--muted); font-size: 12px; margin-top: 24px; }
+  #share { border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; margin-bottom: 20px; font-size: 14px; }
+  #share h2 { font-size: 14px; margin: 0 0 4px; }
+  #share p { color: var(--muted); font-size: 12px; margin: 0 0 10px; }
+  #editors { list-style: none; margin: 0 0 12px; padding: 0; }
+  #editors li { display: flex; gap: 8px; align-items: center; justify-content: space-between; padding: 4px 0;
+                border-bottom: 1px solid var(--line); }
+  #editors li.empty { color: var(--muted); border: 0; }
+  #editors a { color: var(--accent); word-break: break-all; }
+  #addForm { display: flex; gap: 8px; flex-wrap: wrap; }
+  #webid { flex: 1 1 240px; min-width: 0; font: inherit; font-size: 13px; padding: 4px 8px; border-radius: 6px;
+           border: 1px solid var(--line); background: transparent; color: var(--fg); }
+  #shareMsg { color: var(--muted); font-size: 12px; min-height: 1.2em; margin-top: 8px; }
+  button:disabled { opacity: .5; cursor: default; }
 </style>
 </head>
 <body>
@@ -42,11 +55,22 @@
   <div id="status">
     <span id="live">connecting</span>
     <span id="who">viewing as public</span>
+    <button id="shareBtn" hidden aria-expanded="false" aria-controls="share">Editors</button>
     <button id="auth" hidden>Log in</button>
   </div>
 </header>
 <main>
   <div id="msg"></div>
+  <section id="share" hidden>
+    <h2>Editors</h2>
+    <p>Everyone can read this pad. People listed here can also edit it after logging in with their WebID.</p>
+    <ul id="editors"></ul>
+    <form id="addForm">
+      <input id="webid" type="url" placeholder="https://id.inrupt.com/name" aria-label="WebID to add" required>
+      <button type="submit">Add editor</button>
+    </form>
+    <div id="shareMsg" role="status"></div>
+  </section>
   <div id="pad" aria-label="Pad text"></div>
   <p class="hint" id="hint" hidden>Enter splits a line, Backspace at the start of a line joins it to the line above, arrow keys move between lines. Edits save automatically.</p>
 </main>

@@ -24,7 +24,13 @@ copy is a read-only, live-updating viewer; its **Edit** button opens this site.
 ## Access
 
 `deploy.sh` copies the viewer to `<pod>/pad/`, seeds `pad.ttl` if missing, and adds a
-public-read policy. Only the owner's WebID can write. It reads credentials from `../.env`
+public-read policy. Only the owner's WebID can write until the owner adds editors.
+
+**Editors:** when the owner is logged in, the **Editors** button lists who can edit and lets
+the owner add or remove people by WebID. Each editor is an `acp:agent` on one extra policy
+(`#editors`, Read/Write/Append) in `pad.ttl`'s ACR, changed with small SPARQL `PATCH`es. The app
+decides who can edit from the Pod's `WAC-Allow` header, not from the document, and each line
+shows who wrote it on hover (`dc:author`). It reads credentials from `../.env`
 (`ENV_FILE=...` to override): `SOLID_CLIENT_ID`, `SOLID_CLIENT_SECRET`, `SOLID_WEBID`, `SOLID_POD_ROOT`.
 
 ## Editing
