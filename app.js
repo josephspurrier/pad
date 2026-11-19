@@ -179,6 +179,35 @@
     return el;
   }
 
+  // Display names: read foaf:name (or vcard:fn) from the WebID document, then
+  // from the documents it points to (rdfs:seeAlso, foaf:isPrimaryTopicOf).
+  // Public reads only; anyone whose profile is private just shows as their WebID.
+  const names = new Map();   // webId -> name (only once found)
+  const lookups = new Map(); // webId -> Promise<name|null>
+  function nameOf(webId) {
+    if (!lookups.has(webId)) lookups.set(webId, (async () => {
+      const NAME = ['http://xmlns.com/foaf/0.1/name', 'http://www.w3.org/2006/vcard/ns#fn'];
+      const MORE = ['http://www.w3.org/2000/01/rdf-schema#seeAlso', 'http://xmlns.com/foaf/0.1/isPrimaryTopicOf'];
+      const queue = [webId], seen = new Set();
+      while (queue.length && seen.size < 4) {
+        const doc = queue.shift().split('#')[0];
+        if (seen.has(doc)) continue;
+        seen.add(doc);
+        try {
+          const r = await fetch(doc, { headers: { Accept: 'text/turtle' } });
+          if (!r.ok) continue;
+          const quads = new N3.Parser({ baseIRI: r.url }).parse(await r.text());
+          const mine = quads.filter((q) => q.subject.value === webId);
+          const hit = mine.find((q) => NAME.includes(q.predicate.value) && q.object.termType === 'Literal');
+          if (hit && hit.object.value.trim()) { names.set(webId, hit.object.value.trim()); return names.get(webId); }
+          for (const q of mine) if (MORE.includes(q.predicate.value) && q.object.termType === 'NamedNode') queue.push(q.object.value);
+        } catch { /* unreadable or not Turtle: try the next document */ }
+      }
+      return null;
+    })());
+    return lookups.get(webId);
+  }
+
   function render() {
     const existing = new Map([...padEl.children].map((el) => [el.dataset.id, el]));
     let prev = null;
@@ -193,7 +222,8 @@
         if (focused) setCaret(el, off);
       }
       const by = state.authors.get(id);
-      el.title = by ? 'Written by ' + by : '';
+      el.title = by ? 'Written by ' + (names.get(by) || by) : '';
+      if (by && !names.has(by)) nameOf(by).then((n) => { if (n) render(); });
       const want = prev ? prev.nextSibling : padEl.firstChild;
       if (want !== el) padEl.insertBefore(el, want);
       prev = el;
@@ -445,7 +475,8 @@
     for (const w of editors) {
       const li = document.createElement('li');
       const a = document.createElement('a');
-      a.href = w; a.textContent = w; a.target = '_blank'; a.rel = 'noopener';
+      a.href = w; a.textContent = names.get(w) || w; a.title = w; a.target = '_blank'; a.rel = 'noopener';
+      if (!names.has(w)) nameOf(w).then((n) => { if (n) a.textContent = n; });
       const b = document.createElement('button');
       b.textContent = 'Remove';
       b.onclick = () => run(b, async () => { await removeEditor(w); }, `Removed ${w}`);
@@ -504,8 +535,10 @@
   // Ask the Pod, not the document: anyone the owner granted Write may edit.
   canEdit = Boolean(me && state.modes.has('write'));
   const isOwner = Boolean(me && state.modes.has('control'));
-  $('who').textContent = !me ? 'viewing as public'
-    : isOwner ? `editing as ${me} (owner)` : canEdit ? `editing as ${me}` : `logged in as ${me} (read-only)`;
+  const whoText = (name) => !me ? 'viewing as public'
+    : isOwner ? `editing as ${name} (owner)` : canEdit ? `editing as ${name}` : `logged in as ${name} (read-only)`;
+  $('who').textContent = whoText(me);
+  if (me) nameOf(me).then((n) => { if (n) $('who').textContent = whoText(n); });
   $('hint').hidden = !canEdit;
   render();
   if (isOwner && acrUrl) setupSharing();
