@@ -71,15 +71,43 @@
     const info = auth.getDefaultSession().info;
     if (info.isLoggedIn) me = info.webId;
     if (location.href !== appUrl) history.replaceState(null, '', appUrl);
-    authBtn.textContent = me ? 'Log out' : 'Log in';
-    authBtn.onclick = async () => {
-      try {
-        if (me) { await auth.logout(); location.replace(appUrl); return; }
-        await auth.login({ oidcIssuer: ISSUER, redirectUrl: REDIRECT, clientName: 'Pad', ...(CLIENT_ID && { clientId: CLIENT_ID }) });
-      } catch (e) {
-        msg('Login failed: ' + e.message);
-      }
-    };
+    if (!me) {
+      authBtn.textContent = 'Log in';
+      authBtn.onclick = async () => {
+        try {
+          await auth.login({ oidcIssuer: ISSUER, redirectUrl: REDIRECT, clientName: 'Pad', ...(CLIENT_ID && { clientId: CLIENT_ID }) });
+        } catch (e) {
+          msg('Login failed: ' + e.message);
+        }
+      };
+    } else {
+      // Log out menu: "app" forgets this app's session only; you stay signed in at
+      // login.inrupt.com, so the next Log in is instant. "idp" also ends the Inrupt
+      // session (RP-initiated logout), so the next Log in asks which account.
+      const menu = $('authMenu');
+      authBtn.textContent = 'Log out ▾';
+      authBtn.setAttribute('aria-haspopup', 'menu');
+      authBtn.setAttribute('aria-expanded', 'false');
+      const show = (open) => { menu.hidden = !open; authBtn.setAttribute('aria-expanded', String(open)); };
+      authBtn.onclick = (e) => { e.stopPropagation(); show(menu.hidden); if (!menu.hidden) menu.querySelector('button').focus(); };
+      document.addEventListener('click', (e) => { if (!menu.contains(e.target)) show(false); });
+      document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !menu.hidden) { show(false); authBtn.focus(); } });
+      $('who').title = me;
+      $('logoutApp').onclick = async () => {
+        await auth.logout({ logoutType: 'app' });
+        location.replace(appUrl);
+      };
+      $('logoutAll').onclick = async () => {
+        try {
+          // Only the Client ID Document registers a post-logout URL; elsewhere Inrupt shows its own page.
+          await auth.logout(CLIENT_ID ? { logoutType: 'idp', postLogoutUrl: REDIRECT } : { logoutType: 'idp' });
+        } catch (e) {
+          msg('Inrupt logout failed: ' + e.message + '. Logged out of Pad only.');
+          await auth.logout({ logoutType: 'app' });
+          setTimeout(() => location.replace(appUrl), 2500);
+        }
+      };
+    }
   }
   const rdfFetch = (...a) => (me ? auth.fetch(...a) : fetch(...a));
 

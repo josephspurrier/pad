@@ -46,6 +46,13 @@
   #webid { flex: 1 1 240px; min-width: 0; font: inherit; font-size: 13px; padding: 4px 8px; border-radius: 6px;
            border: 1px solid var(--line); background: transparent; color: var(--fg); }
   #shareMsg { color: var(--muted); font-size: 12px; min-height: 1.2em; margin-top: 8px; }
+  .menuwrap { position: relative; }
+  #authMenu { position: absolute; right: 0; top: calc(100% + 6px); z-index: 10; min-width: 230px;
+              background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 4px;
+              box-shadow: 0 6px 20px rgba(0,0,0,.15); }
+  #authMenu button { display: block; width: 100%; text-align: left; border: 0; padding: 8px 10px; }
+  #authMenu button:hover, #authMenu button:focus-visible { background: var(--focus); }
+  #authMenu small { display: block; color: var(--muted); font-size: 11px; }
   button:disabled { opacity: .5; cursor: default; }
 </style>
 </head>
@@ -56,7 +63,13 @@
     <span id="live">connecting</span>
     <span id="who">viewing as public</span>
     <button id="shareBtn" hidden aria-expanded="false" aria-controls="share">Editors</button>
-    <button id="auth" hidden>Log in</button>
+    <span class="menuwrap">
+      <button id="auth" hidden>Log in</button>
+      <div id="authMenu" role="menu" hidden>
+        <button id="logoutApp" role="menuitem">Log out of Pad<small>Stay signed in to Inrupt</small></button>
+        <button id="logoutAll" role="menuitem">Log out of Pad and Inrupt<small>Next login asks which account</small></button>
+      </div>
+    </span>
   </div>
 </header>
 <main>
